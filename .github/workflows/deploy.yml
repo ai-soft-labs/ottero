@@ -43,12 +43,14 @@ jobs:
       - name: Update image tags in manifests
         run: |
           TAG=${{ github.event.inputs.image_tag }}
-          sed -i "s|image: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:.*|image: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${TAG}|g" infra/k8s/frontend-deployment.yaml
-          sed -i "s|image: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:.*|image: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${TAG}|g" infra/k8s/backend-deployment.yaml
+          sed -i "s|image: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:.*|image: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${TAG}|g" infra/k8s/06-frontend.yaml
+          sed -i "s|image: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:.*|image: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${TAG}|g" infra/k8s/05-backend.yaml
 
-      - name: Apply Kubernetes manifests
+      - name: Deploy using deploy script
         run: |
-          kubectl apply -f infra/k8s/
+          cd infra/k8s
+          chmod +x deploy.sh 00-cert_manager.sh update.sh
+          ./deploy.sh
 
       - name: Wait for rollout
         run: |

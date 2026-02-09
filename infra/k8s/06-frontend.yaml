@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ottero-frontend
+  namespace: ottero
+  labels:
+    app: ottero-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ottero-frontend
+  template:
+    metadata:
+      labels:
+        app: ottero-frontend
+    spec:
+      containers:
+      - name: ottero-frontend
+        image: ghcr.io/quick-ledger/ottero-frontend:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: config-volume
+          mountPath: /usr/share/nginx/html/config.js
+          subPath: config.js
+      volumes:
+      - name: config-volume
+        configMap:
+          name: ottero-frontend-config
+      imagePullSecrets:
+      - name: ghcr-login
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ottero-frontend
+  namespace: ottero
+spec:
+  selector:
+    app: ottero-frontend
+  ports:
+  - port: 80
+    targetPort: 80

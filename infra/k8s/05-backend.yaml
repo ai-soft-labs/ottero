@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ottero-backend
+  namespace: ottero
+  labels:
+    app: ottero-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ottero-backend
+  template:
+    metadata:
+      labels:
+        app: ottero-backend
+    spec:
+      containers:
+      - name: ottero-backend
+        image: ghcr.io/quick-ledger/ottero-backend:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        env:
+        # Spring Profile
+        - name: SPRING_PROFILES_ACTIVE
+          value: "prod"
+        
+        # Database Configuration
+        - name: SPRING_DATASOURCE_URL
+          value: "jdbc:mysql://ottero-mysql.ottero.svc.cluster.local:3306/ottero?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+        - name: SPRING_DATASOURCE_USERNAME
+          value: "QuickLedger"
+        - name: SPRING_DATASOURCE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ottero-secrets
+              key: ottero-db-password
+        
+        # Hibernate / JPA Configuration
+        - name: SPRING_JPA_DATABASE_PLATFORM
+          value: "org.hibernate.dialect.MySQLDialect"
+        - name: SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT
+          value: "org.hibernate.dialect.MySQLDialect"
+        - name: SPRING_JPA_HIBERNATE_DDL_AUTO
+          value: "update"
+        
+        # AWS Credentials for Secrets Manager access
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: ottero-secrets
+              key: aws-access-key-id
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ottero-secrets
+              key: aws-secret-access-key
+        - name: AWS_REGION
+          value: "ap-southeast-2"
+      
+      imagePullSecrets:
+      - name: ghcr-login
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ottero-backend
+  namespace: ottero
+spec:
+  selector:
+    app: ottero-backend
+  ports:
+  - port: 8080
+    targetPort: 8080

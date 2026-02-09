@@ -1,0 +1,60 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ottero-ingress
+  namespace: ottero
+  annotations:
+    # Traefik Ingress Controller Annotations
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    # cert-manager for automatic Let's Encrypt certificates
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    # Middleware for WWW -> Non-WWW redirect
+    traefik.ingress.kubernetes.io/router.middlewares: ottero-ottero-redirect-to-non-www@kubernetescrd
+spec:
+  tls:
+  - hosts:
+    - ottero.com.au
+    - www.ottero.com.au
+    secretName: ottero-com-au-tls # Where Let's Encrypt certs will be stored
+  rules:
+  - host: ottero.com.au
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: ottero-backend
+            port:
+              number: 8080
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: ottero-frontend
+            port:
+              number: 80
+  - host: www.ottero.com.au
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: ottero-frontend
+            port:
+              number: 80
+
+---
+# Middleware Definition for WWW -> Non-WWW Redirect (Traefik CRD)
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: ottero-redirect-to-non-www
+  namespace: ottero
+spec:
+  redirectRegex:
+    regex: "^https?://www\\.ottero\\.com\\.au(.*)"
+    replacement: "https://ottero.com.au${1}"
+    permanent: true

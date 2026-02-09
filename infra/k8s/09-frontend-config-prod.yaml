@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ottero-frontend-config
+  namespace: ottero
+data:
+  config.js: |
+    window.env = {
+      AUTH0_DOMAIN: "ottero.au.auth0.com",
+      AUTH0_CLIENT_ID: "aaM5hzpR4Cndz6rPQdDpucK1KI8Vvm05",
+      AUTH0_AUDIENCE: "https://api.ottero.com.au",
+      STRIPE_PRICE_BASIC: "price_1SwXG9BN4BBTzyIzU1G5sPnW"
+    };

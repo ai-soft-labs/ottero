@@ -1,0 +1,327 @@
+---
+- name: VPS Hardening and User Setup
+  hosts: k3s_servers
+  become: yes
+
+  vars:
+    users:
+      - name: reza
+        public_key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDY8VQTdtq9Y6YlbOcO8LQtleV3qVaWhXDz9LmvGfW3UWX9+KZ1a16q2YNSwGLmxgL3NyrvVWX0PYOWevfao0VKZx3EnOvqDjKJX8vZaG66Owg34dZAk+VJmoMnQtfmQruxcZZ09LBbGmxvl8W+pqvEo2IivyvlRm/Au8W3xZxRy/sayG6hPABVC6WMakAcW1qrLB2BW14MNhkM0Hr5j5MGQsiyS234AH83pRIZaIDLTn+ossZHE+yKt8iMOEDAY6oHvmKiZaKDdPYWP+7fflNOc8AEFZU3rK/B3YxyLruO38UyWxPwOwgrrGQjRrUkJ9KDI+6voRrLWNsJ6Kobe6IVDqFcZ2Cy+zW9H7gxVFkCbPBheOebo2hnQqJ/5Z0da5WrvKbswN/Oy8nZMJUb7gVTjf+D5x+Ack5t5Mf16Lc+c2vHp0M/W84unxcXQsInZk4d2E0aDf9naIXvavpCp9udP0nWkSXOpD7TcY9nTzdjBurSG6Dej49//XoGh8ebaq0= reza.ghafari@IT-RQXKT9LDXX"
+    
+    # K3s specific ports
+    k3s_ports:
+      - { port: '6443', proto: 'tcp', comment: 'K3s API Server' }
+      - { port: '10250', proto: 'tcp', comment: 'Kubelet metrics' }
+      - { port: '8472', proto: 'udp', comment: 'Flannel VXLAN' }
+      - { port: '51820', proto: 'udp', comment: 'Flannel WireGuard (if used)' }
+      - { port: '51821', proto: 'udp', comment: 'Flannel WireGuard (if used)' }
+    
+    # HTTP/HTTPS for ingress
+    web_ports:
+      - { port: '80', proto: 'tcp', comment: 'HTTP' }
+      - { port: '443', proto: 'tcp', comment: 'HTTPS' }
+
+  tasks:
+    # --- SYSTEM UPDATE ---
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Upgrade all packages
+      apt:
+        upgrade: dist
+        autoremove: yes
+        autoclean: yes
+
+    # --- USER MANAGEMENT ---
+    - name: Create users without password (SSH key only)
+      user:
+        name: "{{ item.name }}"
+        groups: sudo
+        shell: /bin/bash
+        append: yes
+      loop: "{{ users }}"
+
+    - name: Enable passwordless sudo for users
+      lineinfile:
+        dest: "/etc/sudoers.d/{{ item.name }}"
+        line: "{{ item.name }} ALL=(ALL) NOPASSWD:ALL"
+        create: yes
+        mode: '0440'
+        validate: 'visudo -cf %s'
+      loop: "{{ users }}"
+
+    - name: Set authorized keys for users
+      authorized_key:
+        user: "{{ item.name }}"
+        state: present
+        key: "{{ item.public_key }}"
+      loop: "{{ users }}"
+
+    # --- SSH HARDENING ---
+    - name: Disable Root Login and Password Auth
+      lineinfile:
+        dest: /etc/ssh/sshd_config
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        state: present
+      loop:
+        - { regexp: '^#?PermitRootLogin', line: 'PermitRootLogin no' }
+        - { regexp: '^#?PasswordAuthentication', line: 'PasswordAuthentication no' }
+        - { regexp: '^#?PubkeyAuthentication', line: 'PubkeyAuthentication yes' }
+        - { regexp: '^#?ChallengeResponseAuthentication', line: 'ChallengeResponseAuthentication no' }
+        - { regexp: '^#?UsePAM', line: 'UsePAM yes' }
+        - { regexp: '^#?X11Forwarding', line: 'X11Forwarding no' }
+        - { regexp: '^#?MaxAuthTries', line: 'MaxAuthTries 3' }
+        - { regexp: '^#?ClientAliveInterval', line: 'ClientAliveInterval 300' }
+        - { regexp: '^#?ClientAliveCountMax', line: 'ClientAliveCountMax 2' }
+      notify: Restart SSH
+
+    # --- INSTALL ESSENTIAL PACKAGES ---
+    - name: Install essential packages
+      apt:
+        name:
+          - ca-certificates
+          - curl
+          - gnupg
+          - ufw
+          - fail2ban
+          - unattended-upgrades
+          - apt-transport-https
+          - software-properties-common
+        state: present
+        update_cache: yes
+
+    # --- FAIL2BAN CONFIGURATION ---
+    - name: Enable and start fail2ban
+      systemd:
+        name: fail2ban
+        enabled: yes
+        state: started
+
+    - name: Configure fail2ban for SSH
+      copy:
+        dest: /etc/fail2ban/jail.local
+        content: |
+          [DEFAULT]
+          bantime = 3600
+          findtime = 600
+          maxretry = 3
+          
+          [sshd]
+          enabled = true
+          port = 22
+          logpath = /var/log/auth.log
+        mode: '0644'
+      notify: Restart fail2ban
+
+    # --- AUTOMATIC SECURITY UPDATES ---
+    - name: Configure unattended-upgrades
+      copy:
+        dest: /etc/apt/apt.conf.d/50unattended-upgrades
+        content: |
+          Unattended-Upgrade::Allowed-Origins {
+              "${distro_id}:${distro_codename}";
+              "${distro_id}:${distro_codename}-security";
+              "${distro_id}ESMApps:${distro_codename}-apps-security";
+              "${distro_id}ESM:${distro_codename}-infra-security";
+          };
+          Unattended-Upgrade::AutoFixInterruptedDpkg "true";
+          Unattended-Upgrade::MinimalSteps "true";
+          Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+          Unattended-Upgrade::Remove-Unused-Dependencies "true";
+          Unattended-Upgrade::Automatic-Reboot "false";
+        mode: '0644'
+
+    - name: Enable automatic updates
+      copy:
+        dest: /etc/apt/apt.conf.d/20auto-upgrades
+        content: |
+          APT::Periodic::Update-Package-Lists "1";
+          APT::Periodic::Download-Upgradeable-Packages "1";
+          APT::Periodic::AutocleanInterval "7";
+          APT::Periodic::Unattended-Upgrade "1";
+        mode: '0644'
+
+    # --- FIREWALL CONFIGURATION (UFW) ---
+    - name: Reset UFW to default
+      ufw:
+        state: reset
+
+    - name: Set UFW default policies
+      ufw:
+        direction: "{{ item.direction }}"
+        policy: "{{ item.policy }}"
+      loop:
+        - { direction: 'incoming', policy: 'deny' }
+        - { direction: 'outgoing', policy: 'allow' }
+
+    - name: Allow SSH through UFW
+      ufw:
+        rule: allow
+        port: '22'
+        proto: tcp
+        comment: 'SSH'
+
+    - name: Allow K3s specific ports
+      ufw:
+        rule: allow
+        port: "{{ item.port }}"
+        proto: "{{ item.proto }}"
+        comment: "{{ item.comment }}"
+      loop: "{{ k3s_ports }}"
+
+    - name: Allow HTTP/HTTPS for ingress
+      ufw:
+        rule: allow
+        port: "{{ item.port }}"
+        proto: "{{ item.proto }}"
+        comment: "{{ item.comment }}"
+      loop: "{{ web_ports }}"
+
+    - name: Enable UFW
+      ufw:
+        state: enabled
+
+    # --- LOAD KERNEL MODULES (required for K3s) - MUST BE BEFORE SYSCTL ---
+    - name: Load required kernel modules
+      modprobe:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - overlay
+        - br_netfilter
+
+    - name: Ensure kernel modules load on boot
+      copy:
+        dest: /etc/modules-load.d/k3s.conf
+        content: |
+          overlay
+          br_netfilter
+        mode: '0644'
+
+    # --- KERNEL HARDENING (sysctl) ---
+    - name: Apply kernel hardening parameters
+      sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        state: present
+        reload: yes
+      loop:
+        # IP Forwarding (required for K3s)
+        - { name: 'net.ipv4.ip_forward', value: '1' }
+        - { name: 'net.ipv6.conf.all.forwarding', value: '1' }
+        # Network security
+        - { name: 'net.ipv4.conf.all.rp_filter', value: '1' }
+        - { name: 'net.ipv4.conf.default.rp_filter', value: '1' }
+        - { name: 'net.ipv4.icmp_echo_ignore_broadcasts', value: '1' }
+        - { name: 'net.ipv4.conf.all.accept_source_route', value: '0' }
+        - { name: 'net.ipv6.conf.all.accept_source_route', value: '0' }
+        - { name: 'net.ipv4.conf.all.send_redirects', value: '0' }
+        - { name: 'net.ipv4.conf.default.send_redirects', value: '0' }
+        - { name: 'net.ipv4.conf.all.accept_redirects', value: '0' }
+        - { name: 'net.ipv4.conf.default.accept_redirects', value: '0' }
+        - { name: 'net.ipv6.conf.all.accept_redirects', value: '0' }
+        - { name: 'net.ipv6.conf.default.accept_redirects', value: '0' }
+        - { name: 'net.ipv4.icmp_ignore_bogus_error_responses', value: '1' }
+        # Bridge netfilter (required for K3s)
+        - { name: 'net.bridge.bridge-nf-call-iptables', value: '1' }
+        - { name: 'net.bridge.bridge-nf-call-ip6tables', value: '1' }
+
+    # --- DISABLE SWAP (required for K3s) ---
+    - name: Disable swap
+      command: swapoff -a
+      when: ansible_swaptotal_mb > 0
+
+    - name: Remove swap from fstab
+      lineinfile:
+        path: /etc/fstab
+        regexp: '^.*swap.*$'
+        state: absent
+
+    # --- TIMEZONE CONFIGURATION ---
+    - name: Set timezone to UTC
+      timezone:
+        name: UTC
+
+    # --- K3S INSTALLATION ---
+    - name: Check if K3s is already installed
+      stat:
+        path: /usr/local/bin/k3s
+      register: k3s_binary
+
+    - name: Install K3s
+      shell: curl -sfL https://get.k3s.io | sh -
+      args:
+        creates: /usr/local/bin/k3s
+      when: not k3s_binary.stat.exists
+
+    - name: Wait for K3s to be ready
+      command: kubectl get nodes
+      register: k3s_nodes
+      until: k3s_nodes.rc == 0
+      retries: 30
+      delay: 10
+      when: not k3s_binary.stat.exists
+
+    - name: Ensure K3s is running
+      systemd:
+        name: k3s
+        state: started
+        enabled: yes
+
+    - name: Create .kube directory for reza
+      file:
+        path: /home/reza/.kube
+        state: directory
+        owner: reza
+        group: reza
+        mode: '0755'
+
+    - name: Copy kubeconfig to reza's home
+      copy:
+        src: /etc/rancher/k3s/k3s.yaml
+        dest: /home/reza/.kube/config
+        remote_src: yes
+        owner: reza
+        group: reza
+        mode: '0600'
+
+    - name: Update kubeconfig server address
+      replace:
+        path: /home/reza/.kube/config
+        regexp: '127.0.0.1'
+        replace: '{{ ansible_host }}'
+
+    - name: Fetch kubeconfig to local machine
+      fetch:
+        src: /home/reza/.kube/config
+        dest: ~/.kube/ottero-k3s-config
+        flat: yes
+
+    # --- SUMMARY ---
+    - name: Display hardening summary
+      debug:
+        msg:
+          - "VPS hardening and K3s installation complete!"
+          - "Users created: {{ users | map(attribute='name') | list | join(', ') }}"
+          - "SSH hardened: Root login disabled, password auth disabled"
+          - "Firewall enabled: SSH (22), K3s ports, HTTP/HTTPS"
+          - "Fail2ban enabled for SSH protection"
+          - "Automatic security updates enabled"
+          - "Kernel parameters optimized for K3s"
+          - "K3s installed and running"
+          - "Kubeconfig saved to ~/.kube/ottero-k3s-config"
+          - "To use: export KUBECONFIG=~/.kube/ottero-k3s-config"
+
+  handlers:
+    - name: Restart SSH
+      service:
+        name: ssh
+        state: restarted
+
+    - name: Restart fail2ban
+      service:
+        name: fail2ban
+        state: restarted
