@@ -58,6 +58,7 @@ jobs:
 
       - name: Cleanup old container images
         if: github.event_name != 'pull_request'
+        continue-on-error: true
         uses: actions/delete-package-versions@v5
         with:
           package-name: ottero-frontend
