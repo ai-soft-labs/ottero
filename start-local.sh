@@ -50,23 +50,15 @@ if [ "$TUNNEL_ONLY" = true ]; then
     exit 0
 fi
 
-# Step 1: Start MySQL
-echo -e "${GREEN}Step 1: Starting MySQL...${NC}"
-cd infra/local
-if [ -f "docker-compose.yml" ]; then
-    docker-compose up -d
-elif [ -d "mysql" ]; then
-    cd mysql
-    docker-compose up -d
-    cd ..
+# Step 1: Check MySQL is running (assumes external MySQL container)
+echo -e "${GREEN}Step 1: Checking MySQL...${NC}"
+if docker ps | grep -q mysql; then
+    echo -e "${GREEN}✓ MySQL is running${NC}"
+else
+    echo -e "${RED}✗ MySQL container not found. Start it first.${NC}"
+    exit 1
 fi
-cd ../..
-echo -e "${GREEN}✓ MySQL started${NC}"
 echo ""
-
-# Wait for MySQL to be ready
-echo -e "${YELLOW}Waiting for MySQL to be ready...${NC}"
-sleep 5
 
 # Step 2: Start Backend
 echo -e "${GREEN}Step 2: Starting Backend (Spring Boot)...${NC}"
@@ -74,7 +66,7 @@ cd backend
 mvn spring-boot:run -Dspring-boot.run.profiles=dev &
 BACKEND_PID=$!
 cd ..
-echo -e "${GREEN}✓ Backend starting on http://localhost:8080${NC}"
+echo -e "${GREEN}✓ Backend starting on http://localhost:8083${NC}"
 echo ""
 
 # Wait for backend to start
@@ -83,6 +75,10 @@ sleep 10
 # Step 3: Start Frontend
 echo -e "${GREEN}Step 3: Starting Frontend (Vite)...${NC}"
 cd frontend
+if [ ! -d "node_modules" ]; then
+    echo -e "${YELLOW}Installing frontend dependencies...${NC}"
+    npm install
+fi
 npm run dev &
 FRONTEND_PID=$!
 cd ..
@@ -102,7 +98,7 @@ echo -e "${BLUE}========================================${NC}"
 echo -e "${GREEN}✅ Ottero is running!${NC}"
 echo ""
 echo -e "  Frontend: ${BLUE}http://localhost:5173${NC}"
-echo -e "  Backend:  ${BLUE}http://localhost:8080/api${NC}"
+echo -e "  Backend:  ${BLUE}http://localhost:8083/api${NC}"
 echo -e "  MySQL:    ${BLUE}localhost:3306${NC}"
 if [ "$START_TUNNEL" = true ]; then
     echo -e "  Tunnel:   ${BLUE}Check pinggy output for URL${NC}"
