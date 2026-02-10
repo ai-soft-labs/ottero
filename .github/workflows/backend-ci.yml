@@ -58,3 +58,12 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           build-args: |
             JAR_FILE=target/ottro-service-0.0.1-SNAPSHOT.jar
+
+      - name: Cleanup old container images
+        if: github.event_name != 'pull_request'
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: ottero-backend
+          package-type: container
+          min-versions-to-keep: 2
+          delete-only-untagged-versions: false
