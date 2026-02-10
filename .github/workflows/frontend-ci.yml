@@ -14,7 +14,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: quick-ledger/ottero-frontend
+  IMAGE_NAME: ai-soft-labs/ottero-frontend
 
 jobs:
   build-and-push:

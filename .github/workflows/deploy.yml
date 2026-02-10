@@ -17,8 +17,8 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  FRONTEND_IMAGE: quick-ledger/ottero-frontend
-  BACKEND_IMAGE: quick-ledger/ottero-backend
+  FRONTEND_IMAGE: ai-soft-labs/ottero-frontend
+  BACKEND_IMAGE: ai-soft-labs/ottero-backend
 
 jobs:
   deploy:

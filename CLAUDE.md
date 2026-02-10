@@ -42,5 +42,5 @@ Ottero is a full-stack invoicing application in a monorepo structure:
 ## Deployment
 
 - K8s context: `ottero-prod`
-- Images: `ghcr.io/quick-ledger/ottero-frontend`, `ghcr.io/quick-ledger/ottero-backend`
+- Images: `ghcr.io/ai-soft-labs/ottero-frontend`, `ghcr.io/ai-soft-labs/ottero-backend`
 - CI/CD: GitHub Actions (frontend-ci.yml, backend-ci.yml, deploy.yml)

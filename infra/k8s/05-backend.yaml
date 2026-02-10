@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: ottero-backend
-        image: ghcr.io/quick-ledger/ottero-backend:latest
+        image: ghcr.io/ai-soft-labs/ottero-backend:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 8080
