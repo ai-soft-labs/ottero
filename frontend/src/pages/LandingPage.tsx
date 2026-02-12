@@ -36,7 +36,9 @@ const LandingPage = () => {
                         Ottero
                     </h1>
                     <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto">
-                        Streamline your quotes, invoices, assets and customer management in one place—simple, professional, and built for your business.
+                        Simple invoicing, quotes, and client management for small businesses.
+                        <br className="hidden sm:block" />
+                        <span className="text-muted-foreground/80">Not bloated accounting software—just the tools you actually need.</span>
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-4">
                         <Button
