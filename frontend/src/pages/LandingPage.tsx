@@ -28,7 +28,7 @@ const LandingPage = () => {
                 <div className="max-w-3xl space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-1000">
                     <div className="flex flex-col items-center gap-6 mb-6">
                         <Badge variant="secondary" className="px-4 py-1.5 text-sm font-medium rounded-full mb-4 animate-pulse">
-                            🧪 Join our Alpha — Be the first to test our system
+                            Join our test group — Be the first to try Ottero
                         </Badge>
                         <img src="/logo-icon.png" alt="Ottero Logo" className="h-32 w-auto" />
                     </div>
@@ -38,7 +38,7 @@ const LandingPage = () => {
                     <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto">
                         Simple invoicing, quotes, and client management for small businesses.
                         <br className="hidden sm:block" />
-                        <span className="text-muted-foreground/80">Not bloated accounting software—just the tools you actually need.</span>
+                        <span className="text-muted-foreground/80">An app that doesn't complicate things.</span>
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-4">
                         <Button
