@@ -147,7 +147,7 @@ export default function CompanyEditPage() {
                                     name="abn"
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel>ABN *</FormLabel>
+                                            <FormLabel>ABN</FormLabel>
                                             <FormControl>
                                                 <Input placeholder="00 000 000 000" {...field} />
                                             </FormControl>

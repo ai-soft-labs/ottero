@@ -2,7 +2,7 @@ import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { withAuthenticationRequired } from '@auth0/auth0-react';
 import { useEffect } from 'react';
 import Navbar from './Navbar';
-import { useSelectedCompanyId, useAppActions } from '@/store/useAppStore';
+import { useSelectedCompanyId, useHasSeenOnboarding, useAppActions } from '@/store/useAppStore';
 import { useCompanies } from '@/hooks/useCompanies';
 
 const AppLayout = () => {
@@ -19,7 +19,8 @@ const AppLayout = () => {
 // Component to handle route protection and company redirection
 export const ProtectedLayout = ({ children }: { children?: React.ReactNode }) => {
     const selectedCompanyId = useSelectedCompanyId();
-    const { setSelectedCompany } = useAppActions();
+    const hasSeenOnboarding = useHasSeenOnboarding();
+    const { setSelectedCompany, markOnboardingSeen } = useAppActions();
     const location = useLocation();
     const { data: companies, isLoading } = useCompanies();
 
@@ -40,6 +41,18 @@ export const ProtectedLayout = ({ children }: { children?: React.ReactNode }) =>
             return <div className="flex h-screen items-center justify-center">Selecting default company...</div>;
         }
         return <Navigate to="/companies" replace />;
+    }
+
+    // First-time user: redirect to company edit page once
+    // After visiting, they can navigate freely
+    if (!hasSeenOnboarding && companies && companies.length === 1) {
+        if (location.pathname.startsWith('/companies')) {
+            // They're on the company page, mark onboarding as seen
+            markOnboardingSeen();
+        } else {
+            // Redirect to company edit page
+            return <Navigate to={`/companies/${companies[0].id}`} replace />;
+        }
     }
 
     return children ? <>{children}</> : <Outlet />;

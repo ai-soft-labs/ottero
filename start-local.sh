@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+# Removed set -e to allow background processes to show errors
 
 # Colors for output
 RED='\033[0;31m'
@@ -12,7 +12,7 @@ echo -e "${BLUE}🚀 Starting Ottero Local Development Environment${NC}"
 echo ""
 
 # Parse arguments
-START_TUNNEL=false
+START_TUNNEL=true
 TUNNEL_ONLY=false
 
 for arg in "$@"; do
@@ -46,7 +46,7 @@ trap cleanup SIGINT SIGTERM
 # Tunnel only mode
 if [ "$TUNNEL_ONLY" = true ]; then
     echo -e "${BLUE}Starting pinggy tunnel only...${NC}"
-    ssh -p 443 -R0:localhost:8080 -L4300:localhost:4300 -o StrictHostKeyChecking=no -o ServerAliveInterval=30 Mc2F0uGiumF@pro.pinggy.io
+    ssh -p 443 -R0:localhost:8083 -L4300:localhost:4300 -o StrictHostKeyChecking=no -o ServerAliveInterval=30 Mc2F0uGiumF@pro.pinggy.io
     exit 0
 fi
 
@@ -60,17 +60,15 @@ else
 fi
 echo ""
 
-# Step 2: Start Backend
-echo -e "${GREEN}Step 2: Starting Backend (Spring Boot)...${NC}"
-cd backend
-mvn spring-boot:run -Dspring-boot.run.profiles=dev &
-BACKEND_PID=$!
-cd ..
-echo -e "${GREEN}✓ Backend starting on http://localhost:8083${NC}"
-echo ""
-
-# Wait for backend to start
-sleep 10
+# Step 2: Start Pinggy Tunnel
+if [ "$START_TUNNEL" = true ]; then
+    echo -e "${GREEN}Step 2: Starting Pinggy Tunnel...${NC}"
+    ssh -p 443 -R0:localhost:8083 -L4300:localhost:4300 -o StrictHostKeyChecking=no -o ServerAliveInterval=30 Mc2F0uGiumF@pro.pinggy.io &
+    TUNNEL_PID=$!
+    echo -e "${GREEN}✓ Tunnel started${NC}"
+    echo ""
+    sleep 3
+fi
 
 # Step 3: Start Frontend
 echo -e "${GREEN}Step 3: Starting Frontend (Vite)...${NC}"
@@ -79,20 +77,21 @@ if [ ! -d "node_modules" ]; then
     echo -e "${YELLOW}Installing frontend dependencies...${NC}"
     npm install
 fi
-npm run dev &
+npm run dev 2>&1 | while IFS= read -r line; do echo -e "${BLUE}[frontend]${NC} $line"; done &
 FRONTEND_PID=$!
 cd ..
 echo -e "${GREEN}✓ Frontend starting on http://localhost:5173${NC}"
 echo ""
 
-# Step 4: Start Tunnel (optional)
-if [ "$START_TUNNEL" = true ]; then
-    echo -e "${GREEN}Step 4: Starting Pinggy Tunnel...${NC}"
-    ssh -p 443 -R0:localhost:8080 -L4300:localhost:4300 -o StrictHostKeyChecking=no -o ServerAliveInterval=30 Mc2F0uGiumF@pro.pinggy.io &
-    TUNNEL_PID=$!
-    echo -e "${GREEN}✓ Tunnel started${NC}"
-    echo ""
-fi
+# Step 4: Start Backend
+echo -e "${GREEN}Step 4: Starting Backend (Spring Boot)...${NC}"
+cd backend
+# Run maven with full output (no -q flag) to see all logs including errors
+mvn spring-boot:run -Dspring-boot.run.profiles=dev 2>&1 | while IFS= read -r line; do echo -e "${YELLOW}[backend]${NC} $line"; done &
+BACKEND_PID=$!
+cd ..
+echo -e "${GREEN}✓ Backend starting on http://localhost:8083${NC}"
+echo ""
 
 echo -e "${BLUE}========================================${NC}"
 echo -e "${GREEN}✅ Ottero is running!${NC}"

@@ -76,7 +76,7 @@ export type InvoiceFormValues = z.infer<typeof InvoiceSchema>;
 export const CompanySchema = z.object({
     id: z.string().optional(),
     name: z.string().min(1, "Business Name is required"),
-    abn: z.string().min(1, "ABN is required"),
+    abn: z.string().optional(),
     email: z.string().email("Invalid email address").optional().or(z.literal('')),
     phone: z.string().optional(),
     address: z.string().optional(),

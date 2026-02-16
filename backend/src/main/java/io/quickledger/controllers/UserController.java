@@ -1,8 +1,10 @@
 package io.quickledger.controllers;
 
 import io.quickledger.dto.UserDto;
+import io.quickledger.entities.Company;
 import io.quickledger.entities.User;
 import io.quickledger.mappers.UserMapper;
+import io.quickledger.services.CompanyService;
 import io.quickledger.services.UserService;
 
 import org.slf4j.Logger;
@@ -19,19 +21,28 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
+import jakarta.annotation.PostConstruct;
+
 @RestController
 @RequestMapping("/users")
 public class UserController {
 
     private final UserService userService;
+    private final CompanyService companyService;
     private static final Logger logger = LoggerFactory.getLogger(UserController.class);
 
     @Value("${auth0.webhook.secret}")
     private String auth0WebhookSecret;
 
     @Autowired
-    public UserController(UserService userService) {
+    public UserController(UserService userService, CompanyService companyService) {
         this.userService = userService;
+        this.companyService = companyService;
+    }
+
+    @PostConstruct
+    public void init() {
+        logger.info("Auth0 webhook secret loaded: [{}] (length: {})", auth0WebhookSecret, auth0WebhookSecret != null ? auth0WebhookSecret.length() : 0);
     }
 
     @GetMapping("")
@@ -111,15 +122,27 @@ public class UserController {
 
         userService.saveUser(user);
 
+        // Auto-create a default company for the new user
+        Company company = new Company();
+        company.setName(givenName + "'s Company");
+        companyService.createCompanyWithUser(company, user, null);
+        logger.info("Created default company for new user: {}", user.getEmail());
+
         return ResponseEntity.status(HttpStatus.CREATED).body("User created");
     }
 
     private boolean isAuth0ReqAuthorized(String authorizationHeader) {
         if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")) {
+            logger.warn("Auth header missing or doesn't start with Bearer. Header: {}", authorizationHeader);
             return false;
         }
         String token = authorizationHeader.substring(7);
-        return auth0WebhookSecret.equals(token);
+        logger.debug("Received token: [{}], Expected: [{}]", token, auth0WebhookSecret);
+        boolean matches = auth0WebhookSecret.equals(token);
+        if (!matches) {
+            logger.warn("Token mismatch! Received length: {}, Expected length: {}", token.length(), auth0WebhookSecret.length());
+        }
+        return matches;
     }
 
     @PutMapping("/{id}")
